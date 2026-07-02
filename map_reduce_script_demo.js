@@ -17,7 +17,7 @@ define([
         log.audit({
             title:'getInputData START',
             details:`Script: ${runtime.getCurrentScript().id} | Remaining Governance: ${runtime.getCurrentScript().getRemainingUsage()}`
-        });
+        });     
         return search.create({
             type:search.Type.SALES_ORDER,
             filters:[

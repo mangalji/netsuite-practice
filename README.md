@@ -1,78 +1,50 @@
-# NetSuite Practice Repository
+# NetSuite SuiteScript Practice
 
-A practice repository for learning and experimenting with NetSuite SuiteScript development.
+This folder contains NetSuite SuiteScript practice files created while learning customization, automation, and record processing in NetSuite.
 
 ## Overview
 
-This repository contains various NetSuite script examples and practice code demonstrating different SuiteScript features and use cases.
+The scripts in this workspace cover several SuiteScript concepts and script types, including:
 
-## Project Structure
+- Client scripts for form behavior and field logic
+- User event scripts for record-level actions
+- Suitelet scripts for custom pages and user-facing output
+- Map/Reduce scripts for processing data in batches
+- Custom record and sales order related examples
 
-### Script Files
+## Main Files
 
-| File | Purpose |
-|------|---------|
-| `custom_form_with_some_fields.js` | Custom form creation and field manipulation examples |
-| `field_changed.js` | Field change event handlers and client-side logic |
-| `memo_calc_script.js` | Calculation script for memo fields |
-| `prac.js` | General practice code snippets |
-| `sample_prac.js` | Sample practice implementations |
-| `SO_customize_prac.js` | Sales Order customization examples |
-| `suitelet_script_practice_1.js` | Suitelet script development practice |
-| `suitescript_code_prac.js` | General SuiteScript code practice |
-| `total_amount.js` | Total amount calculation logic |
-| `userevent_script_practice_1.js` | User event script examples (before/after submit, etc.) |
-| `validation_script.js` | Form validation logic and examples |
+- `raj_movie_record_script.js` - Map/Reduce script for processing custom movie record data and grouping ratings
+- `raj_so_button_userevent.js` - User event script that adds a button to a sales order record to open a custom suitelet page
+- `raj_suitelet_custom_page.js` - Suitelet that loads a sales order and displays its key details and item list in a custom page
+- `backup_movie_rec.js` - Another Map/Reduce practice example for movie record processing
+- `map_reduce_script_demo.js`, `map_reduce_script_demo1.js`, `map_reduce_script_demo2.js`, `map_reduce_script_demo3.js` - Demo scripts for learning Map/Reduce patterns
+- `custom_form_with_some_fields.js`, `field_changed.js`, `validation_script.js` - Client-side form and field customization practice
+- `memo_calc_script.js`, `total_amount.js`, `SO_customize_prac.js` - Calculation and sales order customization examples
+- `suitelet_prac.js`, `userevent_script_practice_1.js` - Additional suitelet and user event practice scripts
 
-## Getting Started
+## Current Learning Focus
 
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/mangalji/netsuite-practice.git
-   ```
+This folder is mainly being used to practice:
 
-2. Navigate to the project directory:
-   ```bash
-   cd netsuite-practice
-   ```
+- NetSuite script types and deployment basics
+- Loading and reading records
+- Adding custom buttons and UI actions
+- Building custom suitelet pages
+- Processing data with Map/Reduce scripts
+- Working with custom records and custom fields
 
-3. Review the script files to understand different SuiteScript patterns and implementations.
+## How to Use
 
-## Script Types Covered
-
-- **Client Scripts** - `field_changed.js`, `custom_form_with_some_fields.js`
-- **Suitelet Scripts** - `suitelet_script_practice_1.js`
-- **User Event Scripts** - `userevent_script_practice_1.js`
-- **Field Validation** - `validation_script.js`
-- **Calculations** - `memo_calc_script.js`, `total_amount.js`
-- **Customizations** - `SO_customize_prac.js`
-
-## Technologies
-
-- **NetSuite SuiteScript 2.0** - Modern, module-based approach
-- **JavaScript ES6+**
-
-## Usage
-
-These files are intended for learning and experimentation. Review the code comments and structure to understand:
-- API usage patterns
-- Event handler implementations
-- Form and field customizations
-- Calculation logic
-- Validation techniques
+1. Open any script file and review its purpose and script type.
+2. Match the script to the relevant NetSuite deployment type.
+3. Test the scripts in a NetSuite sandbox environment with the appropriate records and custom records.
+4. Update script IDs, deployment IDs, record types, and custom field IDs to fit your account.
 
 ## Notes
 
-This is a practice/learning repository. Code examples may be:
-- Simplified for educational purposes
-- Subject to change as learning continues
-- Not production-ready without further refinement
+These files are for learning and experimentation. They may be simplified, incomplete, or adjusted as the practice work continues.
 
-## Repository Information
+## Reference
 
-- **Repository**: https://github.com/mangalji/netsuite-practice.git
-- **Branch**: main
-
----
-
-For more information about NetSuite SuiteScript, visit the [NetSuite Documentation](https://docs.oracle.com/en/cloud/netsuite/netsuite-customization/index.html).
+For more information, see the official NetSuite SuiteScript documentation.

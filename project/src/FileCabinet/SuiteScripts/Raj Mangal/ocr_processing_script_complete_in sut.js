@@ -121,17 +121,17 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
                 }
             });
 
-            log.audit("ocr coveraga: ",{
-                textLength:extractedText.length,
-                lastText:extractedText.slice(-1000)
-            });
+            // log.audit("ocr coveraga: ",{
+            //     textLength:extractedText.length,
+            //     lastText:extractedText.slice(-1000)
+            // });
 
-            log.audit('llm response details: ',{
-                responseLength:response.text.length,
-                lastText:response.text.slice(-1000),
-                itemStarts:(response.text.match(/ITEM_START/g) || []).length,
-                itemEnds:(response.text.match(/ITEM_END/g) || []).length
-            })
+            // log.audit('llm response details: ',{
+            //     responseLength:response.text.length,
+            //     lastText:response.text.slice(-1000),
+            //     itemStarts:(response.text.match(/ITEM_START/g) || []).length,
+            //     itemEnds:(response.text.match(/ITEM_END/g) || []).length
+            // })
 
             log.audit('LLM Processing Completed', new Date().toISOString());
             

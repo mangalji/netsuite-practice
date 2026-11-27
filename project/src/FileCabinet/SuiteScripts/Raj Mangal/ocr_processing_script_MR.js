@@ -47,23 +47,38 @@
             let itemData = data.itemData;
             let itemLookup = findItemAndVendorName(itemData.description);
 
-            if(!itemLookup.itemId){
-                throw new Error(
-                    'item not found: ' + itemData.description
-                );
-            }
+            // if(!itemLookup.itemId){
+            //     throw new Error(
+            //         'item not found: ' + itemData.description
+            //     );
+            // }
 
             let item = record.create({
                 type:'customrecord1527',
                 isDynamic:true
             });
-
+            
             item.setValue({fieldId:'custrecord157',value:invoiceId});
+            if (itemLookup.itemId){
+                item.setValue({
+                    fieldId: 'custrecord156',
+                    value: itemLookup.itemId
+                });
+            } 
+            // else {
+            //     item.setValue({
+            //         fieldId: 'custrecord_custrecord_remark',
+            //         value: 'Item not found ' + itemData.description
+            //     });
+            // }
 
             item.setValue({
-                fieldId: 'custrecord156',
+                fieldId: 'custrecord_custrecord_remark',
                 value: itemLookup.itemId
+                    ? itemLookup.matchStatus
+                    : 'Item Not Found: ' + itemData.description
             });
+            
 
             item.setValue({
                 fieldId: 'custrecord158',
@@ -81,10 +96,10 @@
             });
 
             // new remark field
-            item.setValue({
-                fieldId:'custrecord_custrecord_remark',
-                value: itemLookup.matchStatus
-            })
+            // item.setValue({
+            //     fieldId:'custrecord_custrecord_remark',
+            //     value: itemLookup.matchStatus
+            // })
             
 
             let itemId = item.save();
@@ -110,11 +125,35 @@
                     return {
                         itemId: null,
                         vendorName: null,
-                        matchStatus:"no item matched"
+                        matchStatus:"Item not found"
                     };
                 }
 
-                var searchValue = description.trim().toLowerCase();
+                var searchValue = description.trim();
+
+                var exactResults = search.create({
+                    type:search.Type.ITEM,
+                    filters:[
+                        ['itemid',search.Operator.IS,searchValue]
+                    ],
+                    columns:[search.createColumn({
+                        name:'internalid',
+                    }),'itemid','vendorname']
+                }).run().getRange({
+                    start:0,end:1
+                });
+                if(exactResults.length>0){
+                    log.audit('Exact item matched',{
+                        extractedName:description,
+                        matchedItem:exactResults[0].getValue('itemid')
+                    });
+
+                    return {
+                        itemId:exactResults[0].getValue('internalid'),
+                        vendorName:exactResults[0].getValue('vendorname'),
+                        matchStatus:'item matched'
+                    };
+                }
 
                 var results = search.create({
 
@@ -136,7 +175,7 @@
                 }).run().getRange({
 
                     start: 0,
-                    end: 1000
+                    end: 2
 
                 });
 
@@ -147,33 +186,41 @@
                     return {
                         itemId: null,
                         vendorName: null,
-                        matchStatus: 'no item matched'
+                        matchStatus: 'Item not found'
                     };
                 }
-                if (results.length === 1){
-                    log.audit('single item matched',{
-                        extractedName:description,
-                        matchedItem:results[0].getValue('itemid')
-                    });
 
-                    return{
-                        itemId:results[0].getValue('internalid'),
-                        vendorName:results[0].getValue('vendorname'),
-                        matchStatus:'item matched'
-                    }
-                }
-                // multiple matching
-                log.audit('multiple items matched',{
-                    extractedName:description,
-                    totalMatches:results.length,
-                    selectedItem:results[0].getValue('itemid')
+                log.audit('multiple Item Matched', {
+                    extractedName: description,
+                    matchedItem: results[0].getValue('itemid'),
+                    multipleMatches: results.length > 1
                 });
+
+
+                // if (results.length === 1){
+                //     log.audit('single item matched',{
+                //         extractedName:description,
+                //         matchedItem:results[0].getValue('itemid')
+                //     });
 
                 return{
                     itemId:results[0].getValue('internalid'),
                     vendorName:results[0].getValue('vendorname'),
-                    matchStatus:'mutliple items fetched'
-                }
+                    matchStatus: results.length === 1 ?'Item Matched' : 'Multiple Items Fetched'
+                };
+                // }
+                // multiple matching
+                // log.audit('multiple items matched',{
+                //     extractedName:description,
+                //     totalMatches:results.length,
+                //     selectedItem:results[0].getValue('itemid')
+                // });
+
+                // return{
+                //     itemId:results[0].getValue('internalid'),
+                //     vendorName:results[0].getValue('vendorname'),
+                //     matchStatus:'mutliple items fetched'
+                // }
             }
         return {
             getInputData:getInputData,

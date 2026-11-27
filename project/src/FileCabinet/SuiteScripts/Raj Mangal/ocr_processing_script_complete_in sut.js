@@ -3,11 +3,11 @@
  * @NScriptType Suitelet
  * @NModuleScope SameAccount
  */
-define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search', 'N/ui/serverWidget', 'N/redirect', 'N/url','N/task'],
-    function(file, documentCapture, llm, log, record, search, serverWidget, redirect, url,task) {
-        
-        function onRequest(context) {
-            try {
+define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search', 'N/ui/serverWidget', 'N/redirect', 'N/url','N/runtime'],
+    function(file, documentCapture, llm, log, record, search, serverWidget, redirect, url,runtime) {
+
+        function onRequest(context){
+             try {
                 if (context.request.method === 'GET') {
                     showUploadForm(context);
                 } else {
@@ -19,8 +19,8 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
                 showUploadForm(context,'Something went wrong!');
             }
         }
-        
-        function showUploadForm(context,errorMessage) {
+
+                function showUploadForm(context,errorMessage) {
             var form = serverWidget.createForm({
                 title: 'Invoice Upload'
             });
@@ -77,6 +77,7 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
             log.audit('Invoice Data Extracted', JSON.stringify(invoiceData));
             
             var recordId = saveInvoiceRecord(invoiceData, fileId);
+            
             log.audit('Record Created', 'ID: ' + recordId);
            
             redirect.toRecord({
@@ -109,10 +110,28 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
                 "Use 'Not mentioned' if any field is missing. List ALL items found in the invoice.";
 
             var response = llm.generateText({
-                prompt: prompt,
-                documents: [{ id: fileId.toString(), data: extractedText }],
-                timeout: 600000
+                modelFamily: llm.ModelFamily.GPT_OSS,
+                // prompt: prompt,
+                prompt:prompt + "\n\nInvoice Text:\n" + extractedText,
+                // documents: [{ id: fileId.toString(), data: extractedText }],
+                timeout: 600000,
+                modelParameters:{
+                    maxTokens:8000,
+                    temperature:0.1
+                }
             });
+
+            log.audit("ocr coveraga: ",{
+                textLength:extractedText.length,
+                lastText:extractedText.slice(-1000)
+            });
+
+            log.audit('llm response details: ',{
+                responseLength:response.text.length,
+                lastText:response.text.slice(-1000),
+                itemStarts:(response.text.match(/ITEM_START/g) || []).length,
+                itemEnds:(response.text.match(/ITEM_END/g) || []).length
+            })
 
             log.audit('LLM Processing Completed', new Date().toISOString());
             
@@ -123,12 +142,12 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
             var items = parseItems(text);
             
             if (items.length === 0) {
-                items.push({
-                    description: 'Demo Item - Sample Product',
-                    quantity: 1,
-                    unitPrice: 100.00,
-                    total: 100.00
-                });
+                // items.push({
+                //     description: 'Demo Item - Sample Product',
+                //     quantity: 1,
+                //     unitPrice: 100.00,
+                //     total: 100.00
+                // });
                 log.audit('No Items Found', 'Added demo item');
             }
             
@@ -153,7 +172,13 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
             var items = [];
             var itemBlocks = text.split('ITEM_START');
             
-            for (var i = 1; i < itemBlocks.length; i++) {
+            for (var i = 1; i < itemBlocks.length; i++) {   
+
+                if(!itemBlocks[i].includes('ITEM_END')){
+                    throw new Error(
+                        'Incomplete LLM response at item number: ' + i
+                    );
+                }
                 var block = itemBlocks[i].split('ITEM_END')[0];
                 
                 var description = getValue(block, 'Item Description');
@@ -211,8 +236,61 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
                 vendorId:results[0].getValue('internalid')})
             return results[0].getValue('internalid')
         }
-        
+
+        function getAllItems(){
+            let items = [];
+
+            let itemSearch = search.create({
+                type:search.Type.ITEM,
+                columns:[
+                    search.createColumn({
+                        name:'internalid',
+                        sort:search.Sort.DESC
+                    }),
+                    'itemid','vendorname'
+                ]
+            });
+
+            let pagedData = itemSearch.runPaged({
+                pageSize:1000
+            })
+
+            pagedData.pageRanges.forEach(function(pageRange){
+                var page = pagedData.fetch({
+                    index:pageRange.index
+                });
+
+                page.data.forEach(function(result){
+                    var itemName = result.getValue('itemid') || '';
+
+                    items.push({
+                        itemId:result.getValue('internalid'),
+                        itemName:itemName,
+                        normalizedName:itemName.trim().toLowerCase(),
+                        vendorName:result.getValue('vendorname')
+                    });
+                });
+            });
+
+            log.audit('item master loaded',{
+                totalItems:items.length,
+                remainingUsage:runtime.getCurrentScript().getRemainingUsage()
+            });
+            return items;
+        }
+
         function saveInvoiceRecord(data, fileId) {
+
+            var startTime = Date.now();
+
+            log.audit('Invoice Processing Started', {
+                totalItems: data.items.length,
+                remainingUsage: runtime.getCurrentScript()
+                    .getRemainingUsage()
+            });
+
+            var allItems = getAllItems()
+
             var invoice = record.create({
                 type: 'customrecord1526',
                 isDynamic: true
@@ -235,27 +313,199 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
 
             var invoiceId = invoice.save();
             log.audit('Invoice Created', 'Invoice ID: ' + invoiceId);
-            
-            let map_reduce_task = task.create({
-                taskType:task.TaskType.MAP_REDUCE,
-                scriptId:'customscript_ags_mr_ocr_processing',
-                deploymentId:'customdeploy1',
-                params:{
-                    custscript_ocr_processing_bulk_data: JSON.stringify({
-                        invoiceId:invoiceId,
-                        items:data.items
-                    })
+
+            var matchedItems = 0;
+            var unmatchedItems = 0;
+
+            for(var i = 0; i < data.items.length; i++){
+                var itemData = data.items[i];
+
+                var itemLookup = findItemAndVendorName(
+                    itemData.description,
+                    allItems
+                );
+                var item = record.create({
+                    type:'customrecord1527',
+                    isDynamic:true
+                });
+
+                item.setValue({
+                    fieldId:'custrecord157',
+                    value:invoiceId
+                });
+
+                if(itemLookup.itemId){
+                    item.setValue({
+                        fieldId:'custrecord156',
+                        value:itemLookup.itemId
+                    });
+
+                    matchedItems++;
+                } else {
+                    unmatchedItems++;
                 }
+
+                item.setValue({
+                    fieldId:'custrecord158',
+                    value:itemData.quantity
+                });
+
+                item.setValue({
+                    fieldId:'custrecord159',
+                    value:itemData.unitPrice
+                });
+
+                item.setValue({
+                    fieldId:'custrecord160',
+                    value:itemData.total
+                });
+
+                item.setValue({
+                    fieldId:'custrecord_custrecord_remark',
+                    value:itemLookup.itemId ? itemLookup.matchStatus : 'Item not Found: ' + itemData.description
+                });
+
+                item.save();
+
+                // log.audit('items matched',{
+                //     invoiceId:invoiceId,
+                //     lineNumber:i+1,
+                //     itemId:itemId,
+                //     description:itemData.description,
+                //     matchStatus:itemLookup.matchStatus,
+                //     remainingUsage:runtime.getCurrentScript().getRemainingUsage()
+                // });
+            }
+
+            log.audit('Invoice processing completed',{
+                invoiceId: invoiceId,
+                totalItems: data.items.length,
+                matchedItems: matchedItems,
+                unmatchedItems: unmatchedItems,
+                executionTimeSeconds: (Date.now() - startTime) / 1000,
+                remainingUsage: runtime.getCurrentScript().getRemainingUsage()
             });
 
-            var taskId = map_reduce_task.submit();
-            log.audit('Map Reduce Submitted', {
-                invoiceId: invoiceId,
-                taskId: taskId
-            });
             return invoiceId;
+            
         }
-        
+            function findItemAndVendorName(description,allItems) {
+
+                if (!description || !description.trim()) {
+
+                    return {
+                        itemId: null,
+                        vendorName: null,
+                        matchStatus:"Item not found"
+                    };
+                }
+
+                var searchValue = description.trim();
+
+                var exactMatch = allItems.find(function(item){
+                    return item.normalizedName === searchValue;
+                });
+                if (exactMatch){
+                    return {
+                        itemId:exactMatch.itemId,
+                        vendorName:exactMatch.vendorName,
+                        matchStatus:'Item Matched'
+                    };
+                }
+
+                var partialMatches = allItems.filter(function(item){
+                    return item.normalizedName.includes(searchValue);
+                });
+
+                if (partialMatches.length === 0){
+                    log.error('item not found',description);
+
+                    return {
+                        itemId:null,
+                        vendorName:null,
+                        matchStatus:'Item not found'
+                    };
+                }
+
+                return {
+                    itemId:partialMatches[0].itemId,
+                    vendorName:partialMatches[0].vendorName,
+                    matchStatus: partialMatches.length === 1 ? 'Item Matched' : 'Multiple Item Matched'
+                }
+
+                // var exactResults = search.create({
+                //     type:search.Type.ITEM,
+                //     filters:[
+                //         ['itemid',search.Operator.IS,searchValue]
+                //     ],
+                //     columns:[search.createColumn({
+                //         name:'internalid',
+                //     }),'itemid','vendorname']
+                // }).run().getRange({
+                //     start:0,end:1
+                // });
+                // if(exactResults.length>0){
+                //     log.audit('Exact item matched',{
+                //         extractedName:description,
+                //         matchedItem:exactResults[0].getValue('itemid')
+                //     });
+
+                //     return {
+                //         itemId:exactResults[0].getValue('internalid'),
+                //         vendorName:exactResults[0].getValue('vendorname'),
+                //         matchStatus:'item matched'
+                //     };
+                // }
+
+                // var results = search.create({
+
+                //     type: search.Type.ITEM,
+
+                //     filters: [
+                //         ['itemid', search.Operator.CONTAINS, searchValue]
+                //     ],
+
+                //     columns: [
+                //         search.createColumn({
+                //             name: 'internalid',
+                //             sort: search.Sort.DESC
+                //         }),
+                //         'itemid',
+                //         'vendorname'
+                //     ]
+
+                // }).run().getRange({
+
+                //     start: 0,
+                //     end: 2
+
+                // });
+
+                // if (!results || results.length === 0) {
+
+                //     log.error('Item Not Found', description);
+
+                //     return {
+                //         itemId: null,
+                //         vendorName: null,
+                //         matchStatus: 'Item not found'
+                //     };
+                // }
+
+                // log.audit('multiple Item Matched', {
+                //     extractedName: description,
+                //     matchedItem: results[0].getValue('itemid'),
+                //     multipleMatches: results.length > 1
+                // });
+
+                // return{
+                //     itemId:results[0].getValue('internalid'),
+                //     vendorName:results[0].getValue('vendorname'),
+                //     matchStatus: results.length === 1 ?'Item Matched' : 'Multiple Items Fetched'
+                // };
+
+            }
+
         function parseDate(dateStr) {
             if (!dateStr) return null;
             
@@ -281,6 +531,10 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
                 return null;
             }
         }
-        
-        return { onRequest: onRequest };
+        return {
+            onRequest: onRequest
+        };
+
     });
+
+

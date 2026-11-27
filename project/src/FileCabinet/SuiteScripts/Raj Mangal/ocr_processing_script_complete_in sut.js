@@ -20,7 +20,7 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
             }
         }
 
-                function showUploadForm(context,errorMessage) {
+        function showUploadForm(context,errorMessage) {
             var form = serverWidget.createForm({
                 title: 'Invoice Upload'
             });
@@ -107,6 +107,7 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
                 "Unit Price: [number]\n" +
                 "Item Total: [number]\n" +
                 "ITEM_END\n\n" +
+                "follow date format strictly\n\n" +
                 "Use 'Not mentioned' if any field is missing. List ALL items found in the invoice.";
 
             var response = llm.generateText({
@@ -217,25 +218,29 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
             return isNaN(num) ? 0 : num;
         }
 
-        function findVendorId(vendorName) {
-            if (!vendorName || !vendorName.trim()) return null;
-            let searchValue = vendorName.trim().toLowerCase();
-            var results = search.create({
-                type: search.Type.VENDOR,
-                filters: [['entityid', search.Operator.IS, vendorName]],
-                columns: ['internalid','entityid']
-            }).run().getRange({ start: 0, end: 1 });
+        // function findVendorId(vendorName) {
+        //     if (!vendorName || !vendorName.trim()) return null;
+        //     let searchValue = vendorName.trim().toLowerCase();
+        //     var results = search.create({
+        //         type: search.Type.VENDOR,
+        //         filters: [
+        //             ['entityid', search.Operator.IS, searchValue],
+        //             ],
+                    
 
-            if(!results || results.length === 0){
-                log.error('vendor not matched', vendorName);
-                return null;
-            }
+        //         columns: ['internalid','entityid','companyname']
+        //     }).run().getRange({ start: 0, end: 2 });
 
-            log.audit('vendor fetched.',{
-                vendorName:results[0].getValue('entityid'),
-                vendorId:results[0].getValue('internalid')})
-            return results[0].getValue('internalid')
-        }
+        //     if(!results || results.length === 0){
+        //         log.error('vendor not matched', vendorName);
+        //         return null;
+        //     }
+
+        //     log.audit('vendor fetched.',{
+        //         vendorName:results[0].getValue('entityid'),
+        //         vendorId:results[0].getValue('internalid')})
+        //     return results[0].getValue('internalid')
+        // }
 
         function getAllItems(){
             let items = [];
@@ -296,12 +301,42 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
                 isDynamic: true
             });
             
-            var vendorId = findVendorId(data.vendorName);
+            // var vendorId = findVendorId(data.vendorName);
 
+            log.audit('Date Debug', {
+                extractedInvoiceDate: data.invoiceDate,
+                extractedDueDate: data.dueDate,
+                parsedInvoiceDate: String(parseDate(data.invoiceDate)),
+                parsedDueDate: String(parseDate(data.dueDate))
+            });
+            // var invoiceDate = parseDate(data.invoiceDate);
+            // var dueDate = parseDate(data.dueDate);
+            // if(invoiceDate){
+            //     invoice.setValue({
+            //         fieldId:'custrecord_invoice_date',
+            //         value:invoiceDate
+            //     });
+            // } else if(data.invoiceDate){
+            //     throw new Error(
+            //         'invalid invoice date: ' + data.invoiceDate
+            //     );
+            // }
+
+            // if (dueDate){
+            //     invoice.setValue({
+            //         fieldId:'custrecordcustrecord_due_date',
+            //         value:dueDate
+            //     });
+            // } else if(date.dueDate) {
+            //     throw new Error(
+            //         'Invalid Due Date: ' + data.dueDate
+            //     )
+            // }
             invoice.setValue({ fieldId: 'custrecord_invoice_number', value: data.invoiceNumber });
             invoice.setValue({ fieldId: 'custrecord_invoice_date', value: parseDate(data.invoiceDate) });
             invoice.setValue({ fieldId: 'custrecordcustrecord_due_date', value: parseDate(data.dueDate) });
-            invoice.setValue({ fieldId: 'custrecordcustrecord_vendor_name',value:vendorId});
+            // invoice.setValue({ fieldId: 'custrecordcustrecord_vendor_name',value:vendorId});
+            invoice.setValue({ fieldId: 'custrecordcustrecord_vendor_name',value:data.vendorName});
             invoice.setValue({ fieldId: 'custrecordcustrecord_vendor_address', value: data.vendorAddress });
             invoice.setValue({ fieldId: 'custrecordcustrecord_customer_name', value: data.customerName });
             invoice.setValue({ fieldId: 'custrecordcustrecord_customer_address', value: data.customerAddress });
@@ -362,19 +397,10 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
 
                 item.setValue({
                     fieldId:'custrecord_custrecord_remark',
-                    value:itemLookup.itemId ? itemLookup.matchStatus : 'Item not Found: ' + itemData.description
+                    value:itemLookup.itemId ? itemLookup.matchStatus : itemData.description
                 });
 
                 item.save();
-
-                // log.audit('items matched',{
-                //     invoiceId:invoiceId,
-                //     lineNumber:i+1,
-                //     itemId:itemId,
-                //     description:itemData.description,
-                //     matchStatus:itemLookup.matchStatus,
-                //     remainingUsage:runtime.getCurrentScript().getRemainingUsage()
-                // });
             }
 
             log.audit('Invoice processing completed',{
@@ -432,82 +458,59 @@ define(['N/file', 'N/documentCapture', 'N/llm', 'N/log', 'N/record', 'N/search',
                     vendorName:partialMatches[0].vendorName,
                     matchStatus: partialMatches.length === 1 ? 'Item Matched' : 'Multiple Item Matched'
                 }
-
-                // var exactResults = search.create({
-                //     type:search.Type.ITEM,
-                //     filters:[
-                //         ['itemid',search.Operator.IS,searchValue]
-                //     ],
-                //     columns:[search.createColumn({
-                //         name:'internalid',
-                //     }),'itemid','vendorname']
-                // }).run().getRange({
-                //     start:0,end:1
-                // });
-                // if(exactResults.length>0){
-                //     log.audit('Exact item matched',{
-                //         extractedName:description,
-                //         matchedItem:exactResults[0].getValue('itemid')
-                //     });
-
-                //     return {
-                //         itemId:exactResults[0].getValue('internalid'),
-                //         vendorName:exactResults[0].getValue('vendorname'),
-                //         matchStatus:'item matched'
-                //     };
-                // }
-
-                // var results = search.create({
-
-                //     type: search.Type.ITEM,
-
-                //     filters: [
-                //         ['itemid', search.Operator.CONTAINS, searchValue]
-                //     ],
-
-                //     columns: [
-                //         search.createColumn({
-                //             name: 'internalid',
-                //             sort: search.Sort.DESC
-                //         }),
-                //         'itemid',
-                //         'vendorname'
-                //     ]
-
-                // }).run().getRange({
-
-                //     start: 0,
-                //     end: 2
-
-                // });
-
-                // if (!results || results.length === 0) {
-
-                //     log.error('Item Not Found', description);
-
-                //     return {
-                //         itemId: null,
-                //         vendorName: null,
-                //         matchStatus: 'Item not found'
-                //     };
-                // }
-
-                // log.audit('multiple Item Matched', {
-                //     extractedName: description,
-                //     matchedItem: results[0].getValue('itemid'),
-                //     multipleMatches: results.length > 1
-                // });
-
-                // return{
-                //     itemId:results[0].getValue('internalid'),
-                //     vendorName:results[0].getValue('vendorname'),
-                //     matchStatus: results.length === 1 ?'Item Matched' : 'Multiple Items Fetched'
-                // };
-
             }
 
         function parseDate(dateStr) {
-            if (!dateStr) return null;
+            if (!dateStr || !String(dateStr).trim()) return null;
+            
+            dateStr = String(dateStr).trim();
+
+            if(dateStr.toLowerCase() === 'not mentioned'){
+                return null;
+            }
+
+            // var day,month,year,match;
+
+            // var months = {
+            //         jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+            //         jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+            //     };
+
+            // if ((match = dateStr.match(
+            //     /^(\d{4})-(\d{1,2})-(\d{1,2})$/
+            //     ))) {
+            
+            //     year = Number(match[1]);
+            //     month = Number(match[2]) - 1;
+            //     day = Number(match[3]);
+            // } else if ((match = dateStr.match(
+            //     /^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/
+            //     ))) {
+            //         day = Number(match[1]);
+            //         month = months[match[2].substring(0, 3).toLowerCase()];
+            //         year = Number(match[3]);
+            // } else {
+            //     log.error('Unsupported Date Format', dateStr);
+            //     return null;
+            // }
+
+            // if (year < 100){
+            //     year += 2000;
+            // }
+
+            // var date = new Date(year,month,day);
+
+            // if(
+            //     isNan(date.getTime()) ||
+            //     date.getDate() !== dat ||
+            //     date.getMonth() !== month ||
+            //     date.getFullYear() !== year
+            // ){
+            //     log.error('Invalid Date', dateStr);
+            //     return null;
+            // }
+
+            // return date;
             
             try {
                 var parts = dateStr.split('-');
